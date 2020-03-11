@@ -27,7 +27,18 @@ var budgetController = (function() {
         totals: {
             exp: 0,
             inc: 0
-        }
+        },
+        budget: 0,
+        percentage: -1
+    }
+
+    //En esta funcion loopeamos al allItems correspondiente al type puesto, y lo vamos sumando en acumulcion y al final al totals del data correspondiente le fijamos el valor de dicha suma
+    calculateTotal = (type) => {
+        var sum = 0;
+        data.allItems[type].forEach(function(cur) {
+            sum += cur.value;
+        });
+        data.totals[type] = sum;
     }
     
     //Todo lo que esta luego del return va a interactuar al global scope, para interactuar con el modulo controller
@@ -45,7 +56,7 @@ var budgetController = (function() {
                 ID = 0;
             };
             
-
+            //Para crear un objeto Expense o Income
             if (type === 'exp') {
                 newItem = new Expense(ID, des, val);
             } else if (type === 'inc'){
@@ -60,8 +71,38 @@ var budgetController = (function() {
 
         },
         
+        calculateBudget: function(){
+
+            //calculate total income and expenses
+            calculateTotal('inc');
+            calculateTotal('exp');
+
+            //calculate budget (inc-exp) y guardar en budget dentro de data
+            data.budget = (data.totals.inc - data.totals.exp)
+
+            //calculate the % of income spent y guardar en percentage dentro de data.
+            //El If es para que si es solo expenses se dividiria entre 0 y eso es un error, tiene que ser calculado solo si hay incomes
+            if(data.totals.inc > 0) {
+               data.percentage = Math.round((data.totals.exp / data.totals.inc) * 100); 
+            } else {
+                data.percentage = -1;
+            }
+            
+
+        },
+
+        //Una funcion solamente para sacar al global scope los datos que deben ser tratados luego en el UI
+        getBudget: function() {
+            return {
+                budget: data.budget,
+                percentage: data.percentage,
+                totalInc: data.totals.inc,
+                totalExp: data.totals.exp
+            }
+        },
+
         testing: function() {
-        console.log(data);
+            console.log(data);
         }
     };
 
@@ -78,7 +119,14 @@ var UIController = (function() {
         inputType: '.add__type',
         inputDescription: '.add__description',
         inputValue: '.add__value',
-        inputBtn: '.add__btn'
+        inputBtn: '.add__btn',
+        incomeContainer: '.income__list',
+        expensesContainer: '.expenses__list',
+        budgetLabel: '.budget__value',
+        incomeLabel: '.budget__income--value',
+        expenseLabel: '.budget__expenses--value',
+        percentageLabel: '.budget__expenses--percentage',
+        container: '.container'
     }
 
     //Todo lo que sale de aqui es visto en el Global Scope
@@ -87,27 +135,69 @@ var UIController = (function() {
             return {
                 type: document.querySelector(DOMstrings.inputType).value,          //Will be either inc or exp
                 description: document.querySelector(DOMstrings.inputDescription).value,
-                value: document.querySelector(DOMstrings.inputValue).value
+                value: parseFloat(document.querySelector(DOMstrings.inputValue).value)      //parseFloat cambia el string a un numero, porque sino es inutil e calculos
             };
         },
 
         //Metodo para agregar items a la lista visible de la interfaz
         addListItems: function(obj, type) {
-            var html
+            var html, newHtml, element, fields;
 
-            //Create HTML string with placerhlder text
+            //Create HTML string with placerhlder text, los placeholders son el %id%, %value% y %description%, que son reemplezados con el obj que metemos en la funcion, en el siguiente paso
             if(type === 'inc') {
-                html = '<div class="item clearfix" id="income-0"> <div class="item__description">Salary</div> <div class="right clearfix"> <div class="item__value">+ 2,100.00</div> <div class="item__delete"> <button class="item__delete--btn"><i class="ion-ios-close-outline"></i></button> </div> </div> </div>'
+                //este elemet se fija en el if, para desde aqui saber a cual de los containers o listas le vamos a agregar en el ultimo paso de insersion al DOM
+                element = DOMstrings.incomeContainer;
+
+                html = '<div class="item clearfix" id="inc-%id%"> <div class="item__description">%description%</div> <div class="right clearfix"> <div class="item__value">%value%</div> <div class="item__delete"> <button class="item__delete--btn"><i class="ion-ios-close-outline"></i></button> </div> </div> </div>'
             } else if (type === 'exp') {
-                html = '<div class="item clearfix" id="expense-0"> <div class="item__description">Apartment rent</div> <div class="right clearfix"> <div class="item__value">- 900.00</div> <div class="item__percentage">21%</div> <div class="item__delete"> <button class="item__delete--btn"><i class="ion-ios-close-outline"></i></button> </div> </div> </div>'
+                element = DOMstrings.expensesContainer;
+
+                html = '<div class="item clearfix" id="exp-%id%"> <div class="item__description">%description%</div> <div class="right clearfix"> <div class="item__value">%value%</div> <div class="item__percentage">21%</div> <div class="item__delete"> <button class="item__delete--btn"><i class="ion-ios-close-outline"></i></button> </div> </div> </div>'
             }
             
-            //Replace the placeholer text with actual data
-
-            //Insert the HTML into the DOM
+            //Replace the placeholer text with actual data. el metodo .replace primer argumento es que se busca para ser reemplazado, por eso se le puso doble % (asi se hacia unico) y segundo parametro es porque sera reemplazado, en nuestro caso es cada una de las propiedades del obj que le pasamos.
+            //El primero es sobre el html pero el segundo es sobre el primero, porque si de nuevo hacemos sobre el html, no tendra la modificacion hecha por el primero, lo mismo para el tercero, 
+            newHtml = html.replace('%id%', obj.id);
+            newHtml = newHtml.replace('%description%', obj.description);
+            newHtml = newHtml.replace('%value%', obj.value);
+            
+            //Insert the HTML into the DOM. Primero seleccionamos en que lado de la pagina va, lista de incomes o lista de expenses, por eso se le pasa el element, que ya definimos correctamente en el if de dos pasos arriba. Y se usa el newHtml porque es el que ya tiene los tres placeholders
+            document.querySelector(element).insertAdjacentHTML('beforeend', newHtml);
 
         },
 
+        //Funcion para borrar los datos ya no necesarios en la interfaz, una vez se hace enter o click en Add
+        clearFields: function(){
+           var fields, fieldsArr;
+           
+            //Ya que el querySelectroAll se trabaja como en CSS, se debe agragar una coma como string en medio. Devuelve una Node List, no array
+            fields = document.querySelectorAll(DOMstrings.inputDescription + ', ' + DOMstrings.inputValue) 
+            
+            //Esta es ua manera de 'encañar' al programa, para pasarle una lista y que devuelva un array. El .slice method es propio de Arrays y devuelve arrays, se lo busca con el .prototye al func contructor Array y se lo llama con .call que es donde se pasa la lista. asi nos devolvera un array en base a esta lista
+            //Se ha probado que no es necesario, la Node List como el Array pueden tener el forEach method. punto para Kurt
+            //fieldsArr = Array.prototype.slice.call(fields);
+            
+            //Ahora se puede usar el nuevo array para hacerle un buen loop y a cada elemento del array a su .value se lo pone en blanco con ""
+            fields.forEach(function(current, index, array){
+                current.value = "";
+            })
+
+            //Devuelve el typeo a la primera caja de descripcion.
+            fields[0].focus();
+        },
+        
+        //metodo para usar la parte de arriba, la que muestra los totales. Igualando el DOMstring respectivo con la propiedad del objeto que se le pasara. Y se le va a pasar el getBudget de la linea 95, por eso esos parametros
+        dispalyBudget: function(obj){
+            document.querySelector(DOMstrings.budgetLabel).textContent = obj.budget;
+            document.querySelector(DOMstrings.incomeLabel).textContent = obj.totalInc;
+            document.querySelector(DOMstrings.expenseLabel).textContent = obj.totalExp;
+            
+            if(obj.percentage > 0) {
+                document.querySelector(DOMstrings.percentageLabel).textContent = obj.percentage + '%';
+            } else {
+                document.querySelector(DOMstrings.percentageLabel).textContent = '---';
+            }
+        },
 
         //Metodo colocado aqui para poder acceder a los lugares de input desde afuera
         getDOMstrings: function() {
@@ -142,6 +232,21 @@ var controller = (function(budgetCtrl, UICtrl){
                 ctrlAddItem();
             }
         })
+
+        //EVENT DELEGATION. Aqui se activa el boton de Borrar que tiene cada linea. al seleccionar todo el container de incomes y expenses con el delegation nos ahorramos no tener que hacer una funcion de borrado para cada uno de las lineas, sino una sola funcion, que cuando se haga click ejecute a funcion ctrDeleteItem
+        document.querySelector(DOM.container).addEventListener('click', ctrDeleteItem);
+    }
+
+    var updateBudget = function() {
+       
+        //1. Calculate the budget
+        budgetCtrl.calculateBudget();
+
+        //2. Return the budget
+        var budget = budgetCtrl.getBudget();
+
+        //3. Display the budget on the UI
+        UICtrl.dispalyBudget(budget);
     }
 
     
@@ -152,22 +257,60 @@ var controller = (function(budgetCtrl, UICtrl){
         //Get the field input data, en forma de obj con type, description y value del Modulo UI
         input = UICtrl.getinput();
         
-        //2. Add the item to the budget contoller, al metodo addItem de la linea 33 del Modulo BudgetControler, pasando las propiedaes del objeto input
-        newItem = budgetCtrl.addItem(input.type, input.description, input.value)
-        
-        //3 add the item to the UI
+        //Este if se hace para que si la descripcion o el valor estan en blanco no se agregue una linea erronea con vacio.
+        // isNaN es un metodo para ver si algo es No un Numero, colcandole el ! es al opusto, en este caso saldra True en el caso de que coloquemos un numero, porque este bajo isNaN saldra false y con el ! se vuelca a True
+        if(input.description !== "" && !isNaN(input.value) && input.value > 0) {
+            //2. Add the item to the budget contoller, al metodo addItem de la linea 33 del Modulo BudgetControler, pasando las propiedaes del objeto input
+            newItem = budgetCtrl.addItem(input.type, input.description, input.value)
+            
+            //3 add the item to the UI
+            UICtrl.addListItems(newItem, input.type);
 
-        //4. Calculate the budget
+            //4. Clear the input fields, luego de haber hecho Enter
+            UICtrl.clearFields();
 
-        //5. Display the budget on the UI
-
+            //5. Calculate and update budget
+            updateBudget(); 
+        } else {
+            alert('Un parametro vacio')
+        };
+               
     };
+
+    var ctrDeleteItem = (event) => {
+        var itemID, spitID, type, ID;
+
+        //TRAVERSING, se tiene el evento (un click en un lugar cualquiera del container de inc y exp, desde el epicentro (target) se sube 4 parents arriba (parenNode) y a dicho elemento (spoiler es un <div>) se le toma la propiedad id que al menos en este proyecto es el unico lugar donde existen
+        itemID = event.target.parentNode.parentNode.parentNode.parentNode.id;
+
+        //Ya que el .id que se ha obtenido en el paso anterior es 'inc-1' por ejemplo, hay que separarlo, para eso se usa el metodo .split que dividira en donde hay un -
+        //Ya separados los guardmos a cada uno en type y ID respectivamente
+        if(itemID) {
+            splitID = itemID.split('-');
+            type = splitID[0];
+            ID = splitID[1];
+
+            //1. Delete item form data structure
+
+            //2. Delete item from UI
+
+            //3. Update and show the new budget
+
+        }
+    }
 
     //Lo que entre en el return aqui sale al Global Scope
     return{
         //La funcion que inicializa tutti
         init: function() {
             console.log('App started');
+            //Para que todo en la parte Top este en 0 y no con valores default
+            UICtrl.dispalyBudget({
+                budget: 0,
+                percentage: 0,
+                totalInc: 0,
+                totalExp: 0
+            })
             setupEventListeners();
         }
     };
