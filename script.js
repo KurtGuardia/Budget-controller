@@ -70,6 +70,26 @@ var budgetController = (function() {
             return newItem;
 
         },
+
+        //Para borrar el item. Se necesita determinar el id especifico que se desea eliminar, ya que no estan en orden, no se puede agregar al final facilmente
+        deleteItem: function(type, id) {
+            var ids, index;
+
+            //Primero se necesita un array con todos los verdaderos ids, que no tengan los eliminados como numero. Para ello se hace uso del .map
+            ids = data.allItems[type].map(function(current){
+                return current.id
+            });
+
+            //Ahora para determinar el lugar especifico del id que estamos buscando se usa el .indexOf, al cual le pasamos el id del elemento que queremos agarrar
+            index = ids.indexOf(id);
+
+            //Ahora se borra el index encontrado del array, se hace con .splice, que recie dos parametros, primero donde empieza (en index) y cuanto borra (solo 1)
+            //Solo debe funcionar si es diferente a -1, por eso el If
+            if(index !== -1) {
+                data.allItems[type].splice(index, 1)
+            }
+
+        },
         
         calculateBudget: function(){
 
@@ -89,6 +109,11 @@ var budgetController = (function() {
             }
             
 
+        },
+
+        //Calcular el porcentage de cada expense en la lista expenses en base al Income
+        calculatePercentage: function(){
+            
         },
 
         //Una funcion solamente para sacar al global scope los datos que deben ser tratados luego en el UI
@@ -163,6 +188,16 @@ var UIController = (function() {
             
             //Insert the HTML into the DOM. Primero seleccionamos en que lado de la pagina va, lista de incomes o lista de expenses, por eso se le pasa el element, que ya definimos correctamente en el if de dos pasos arriba. Y se usa el newHtml porque es el que ya tiene los tres placeholders
             document.querySelector(element).insertAdjacentHTML('beforeend', newHtml);
+
+        },
+
+        //Para borrar del IU
+        deleteListItem: function(selectorID){
+
+            //En JS no se puede eliminar un elemento asi nomas, se tiene que seleccionar un parent y hacerle removeChild, por eso se encuentra el elemento que queremos quitar con el getElementById le vamos a pasar el id claro, y subimos uno al parent superior y ahi aplicamos el removeChild, 
+            //Como seleccionarlo dentro el removeChild es una copia de lo mismo, es que definimos la variable el, para reumir un poco
+            var el = document.getElementById(selectorID)
+            el.parentNode.removeChild(el)
 
         },
 
@@ -249,6 +284,16 @@ var controller = (function(budgetCtrl, UICtrl){
         UICtrl.dispalyBudget(budget);
     }
 
+    var UpdatePercentages = function() {
+
+        //1. calculate percentages
+
+        //2. Read percentages form the budget controller 
+
+        //3. Update the UI with the new percentages
+
+    }
+
     
     //Funcion primaria cuando se agrega valores y se hace Enter o click en el boton
     var ctrlAddItem = function() {
@@ -271,6 +316,10 @@ var controller = (function(budgetCtrl, UICtrl){
 
             //5. Calculate and update budget
             updateBudget(); 
+
+            //6. Calculate and display the updated percentages
+            UpdatePercentages();
+
         } else {
             alert('Un parametro vacio')
         };
@@ -286,15 +335,23 @@ var controller = (function(budgetCtrl, UICtrl){
         //Ya que el .id que se ha obtenido en el paso anterior es 'inc-1' por ejemplo, hay que separarlo, para eso se usa el metodo .split que dividira en donde hay un -
         //Ya separados los guardmos a cada uno en type y ID respectivamente
         if(itemID) {
+
             splitID = itemID.split('-');
             type = splitID[0];
-            ID = splitID[1];
+            ID = parseInt(splitID[1]);      //El splice corta el array y deja como array asi que hay que volverlo numero, para eso el paseInt
 
-            //1. Delete item form data structure
+            //1. Delete item form data structure, es para el uso en esta funcion que se obtiene 'type' y 'id' en el paso anterior
+            budgetCtrl.deleteItem(type, ID);
 
             //2. Delete item from UI
+            UICtrl.deleteListItem(itemID);
 
             //3. Update and show the new budget
+            updateBudget();
+
+            //4. Calculate and display the updated percentages
+            UpdatePercentages();
+            
 
         }
     }
