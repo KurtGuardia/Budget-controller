@@ -10,7 +10,26 @@ var budgetController = (function() {
         this.id = id;
         this.description = description;
         this.value = value;
+        this.percentage = -1        //cuando no hay valor es mejor ya definir como -1 
     };
+
+    //un metodo que debe tener cada uno de los expenses, para el calculo de su peso en relacion al Income
+    Expense.prototype.calcPercentage = function(totalIncome){
+
+        //El if es para que no de errores de division y solo se haga cuando es necesario
+        if(totalIncome > 0){
+            this.percentage = Math.round((this.value / totalIncome) * 100)
+        } else {
+            this.percentage = -1;
+        }
+        
+    };
+
+    //Un metodo para orenadamente obtner el porcentage de cada exp que calculamos arriba. Simplemente para tener funciones con laores especificas
+    Expense.prototype.getPercentage = function() {
+        return this.percentage;
+    }
+
     //Creador de objetos inc, los cuales son los valores puestos en input field del DOM, se crean asi los necesarios, se asignan id
     var Income = function(id, description, value) {
         this.id = id;
@@ -111,9 +130,22 @@ var budgetController = (function() {
 
         },
 
-        //Calcular el porcentage de cada expense en la lista expenses en base al Income
-        calculatePercentage: function(){
-            
+        //Calcular el porcentage de cada expense en la lista expenses en base al Income. por medio de su metodo individual
+        calculatePercentages: function(){
+
+            data.allItems.exp.forEach(function(cur){
+                cur.calcPercentage(data.totals.inc);
+            })
+
+        },
+
+        //Usamos aqui map a diferencia de arriba porque queremos que se cree un nuevo array
+        getPercentages: function(){
+
+            var AllPerc = data.allItems.exp.map(function (cur){
+                return cur.getPercentage();
+            });
+            return AllPerc;
         },
 
         //Una funcion solamente para sacar al global scope los datos que deben ser tratados luego en el UI
@@ -151,7 +183,8 @@ var UIController = (function() {
         incomeLabel: '.budget__income--value',
         expenseLabel: '.budget__expenses--value',
         percentageLabel: '.budget__expenses--percentage',
-        container: '.container'
+        container: '.container',
+        expensesPercLabel: 'item__percentage'
     }
 
     //Todo lo que sale de aqui es visto en el Global Scope
@@ -222,7 +255,7 @@ var UIController = (function() {
         },
         
         //metodo para usar la parte de arriba, la que muestra los totales. Igualando el DOMstring respectivo con la propiedad del objeto que se le pasara. Y se le va a pasar el getBudget de la linea 95, por eso esos parametros
-        dispalyBudget: function(obj){
+        displayBudget: function(obj){
             document.querySelector(DOMstrings.budgetLabel).textContent = obj.budget;
             document.querySelector(DOMstrings.incomeLabel).textContent = obj.totalInc;
             document.querySelector(DOMstrings.expenseLabel).textContent = obj.totalExp;
@@ -232,6 +265,37 @@ var UIController = (function() {
             } else {
                 document.querySelector(DOMstrings.percentageLabel).textContent = '---';
             }
+        },
+
+        //Metodo para mostrar el UI al cual se le va a pasar (eventualmente en el modulo control) el getPercentages como parametro...btw
+        displayPercentages: function(percentages){
+
+            //Se selecciona todos los elementos del html que tengan class "item__percentage", 
+            var fields = document.querySelectorAll(DOMstrings.expensesPercLabel);
+
+            //Se crea una funcion forEach personalizada para mi Node List (los elementos del DOM tree son Nodes)
+            //Esta funcion hace que la que vamos a pasar en el siguiente paso sea un forEach, la funcion que pasemos en el siguiente paso sera llamada aqui, para cada elemento con su respectivo index, tal como un forEach normal, pero esta le pasamos un Node List
+            var nodeListForEach = function(list, callback){
+                for (var i = 0; i < list.length; i++){
+                    callback(list[i], i);
+                }
+            };
+
+            //Le pasamos una funcion que sera aplicada a cada elemento de nuestra Node List en el paso anterior
+            nodeListForEach(fields, function(current, index){
+
+                //El if es para que si el % es 0 o menos 1, no salga cualquier burrada sino unos guiones
+                if(percentages[index] > 0){
+                  
+                    //A cada 'current' que es cada lugar de la Node List, el cual es 'fields', que viene de tomar (querySelectorAll) a todos los elementos del DOM que tienen espacio para porcentajes (expensesPercLabel)
+                    current.textContent = percentages[index] + '%';
+                  
+                } else {
+                    current.textContent = '---';
+                }
+                
+            });
+
         },
 
         //Metodo colocado aqui para poder acceder a los lugares de input desde afuera
@@ -281,17 +345,20 @@ var controller = (function(budgetCtrl, UICtrl){
         var budget = budgetCtrl.getBudget();
 
         //3. Display the budget on the UI
-        UICtrl.dispalyBudget(budget);
+        UICtrl.displayBudget(budget);
     }
 
     var UpdatePercentages = function() {
 
         //1. calculate percentages
+        budgetCtrl.calculatePercentages();
 
         //2. Read percentages form the budget controller 
+        var percentages = budgetCtrl.getPercentages();
 
         //3. Update the UI with the new percentages
-
+        UICtrl.displayPercentages(percentages);
+        
     }
 
     
@@ -362,7 +429,7 @@ var controller = (function(budgetCtrl, UICtrl){
         init: function() {
             console.log('App started');
             //Para que todo en la parte Top este en 0 y no con valores default
-            UICtrl.dispalyBudget({
+            UICtrl.displayBudget({
                 budget: 0,
                 percentage: 0,
                 totalInc: 0,
